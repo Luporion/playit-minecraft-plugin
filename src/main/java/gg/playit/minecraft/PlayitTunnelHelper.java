@@ -231,18 +231,26 @@ public class PlayitTunnelHelper {
 
     /**
      * Send an admin notification about Bedrock tunnel availability.
+     * Uses a delayed task that may fail silently if plugin is not available.
      */
     public static void notifyAdminAboutBedrockTunnel() {
         String message = "[playit.gg] Geyser detected! Use '/playit createtunnels' to create a Bedrock tunnel for Bedrock players.";
         log.info(message);
         
-        // Also notify online ops
-        Bukkit.getScheduler().runTask(Bukkit.getPluginManager().getPlugin("playit-gg"), () -> {
-            for (var player : Bukkit.getServer().getOnlinePlayers()) {
-                if (player.isOp()) {
-                    player.sendMessage("§6[playit.gg]§r Geyser detected! Run §b/playit createtunnels§r to create a Bedrock tunnel.");
-                }
+        // Also notify online ops - wrapped in try-catch to be safe
+        try {
+            var plugin = Bukkit.getPluginManager().getPlugin("playit-gg");
+            if (plugin != null && plugin.isEnabled()) {
+                Bukkit.getScheduler().runTask(plugin, () -> {
+                    for (var player : Bukkit.getServer().getOnlinePlayers()) {
+                        if (player.isOp()) {
+                            player.sendMessage("§6[playit.gg]§r Geyser detected! Run §b/playit createtunnels§r to create a Bedrock tunnel.");
+                        }
+                    }
+                });
             }
-        });
+        } catch (Exception e) {
+            log.warning("[PlayitTunnelHelper] Failed to send in-game notification: " + e.getMessage());
+        }
     }
 }

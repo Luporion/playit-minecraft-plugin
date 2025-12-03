@@ -25,17 +25,17 @@ public class PlayitKeysSetup {
     public static final int STATE_SHUTDOWN = 0;
     private final ApiClient openClient = new ApiClient(null);
     private final boolean isGeyserPresent;
-    private final int geyserPort;
+    private final int bedrockLocalPort;
     private final boolean autoCreateBedrockTunnel;
     private final boolean promptAdminForBedrock;
     private boolean adminPromptSent = false;
 
-    public PlayitKeysSetup(String secretKey, AtomicInteger state, boolean isGeyserPresent, int geyserPort,
+    public PlayitKeysSetup(String secretKey, AtomicInteger state, boolean isGeyserPresent, int bedrockLocalPort,
                            boolean autoCreateBedrockTunnel, boolean promptAdminForBedrock) {
         keys.secretKey = secretKey;
         this.state = state;
         this.isGeyserPresent = isGeyserPresent;
-        this.geyserPort = geyserPort;
+        this.bedrockLocalPort = bedrockLocalPort;
         this.autoCreateBedrockTunnel = autoCreateBedrockTunnel;
         this.promptAdminForBedrock = promptAdminForBedrock;
     }
@@ -158,10 +158,10 @@ public class PlayitKeysSetup {
                 if (isGeyserPresent && !haveBedrock) {
                     if (autoCreateBedrockTunnel) {
                         // Auto-create Bedrock tunnel
-                        log.info("auto_create_bedrock_tunnel is enabled, creating new minecraft bedrock UDP tunnel on port " + geyserPort);
+                        log.info("auto_create_bedrock_tunnel is enabled, creating new minecraft bedrock UDP tunnel on port " + bedrockLocalPort);
                         var create = new CreateTunnel();
                         create.localIp = "127.0.0.1";
-                        create.localPort = geyserPort;
+                        create.localPort = bedrockLocalPort;
                         create.portCount = 1;
                         create.portType = PortType.UDP;
                         create.tunnelType = TunnelType.MinecraftBedrock;

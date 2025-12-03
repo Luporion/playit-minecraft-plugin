@@ -20,15 +20,15 @@ public class PlayitManager implements Runnable {
 
     private final PlayitBukkit plugin;
     private final boolean isGeyserPresent;
-    private final int geyserPort;
+    private final int bedrockLocalPort;
     private final boolean autoCreateBedrockTunnel;
     private final boolean promptAdminForBedrock;
 
-    public PlayitManager(PlayitBukkit plugin, boolean isGeyserPresent, int geyserPort, 
+    public PlayitManager(PlayitBukkit plugin, boolean isGeyserPresent, int bedrockLocalPort, 
                          boolean autoCreateBedrockTunnel, boolean promptAdminForBedrock) {
         this.plugin = plugin;
         this.isGeyserPresent = isGeyserPresent;
-        this.geyserPort = geyserPort;
+        this.bedrockLocalPort = bedrockLocalPort;
         this.autoCreateBedrockTunnel = autoCreateBedrockTunnel;
         this.promptAdminForBedrock = promptAdminForBedrock;
 
@@ -37,7 +37,7 @@ public class PlayitManager implements Runnable {
             secret = null;
         }
 
-        setup = new PlayitKeysSetup(secret, state, isGeyserPresent, geyserPort, autoCreateBedrockTunnel, promptAdminForBedrock);
+        setup = new PlayitKeysSetup(secret, state, isGeyserPresent, bedrockLocalPort, autoCreateBedrockTunnel, promptAdminForBedrock);
     }
 
     private final PlayitKeysSetup setup;
