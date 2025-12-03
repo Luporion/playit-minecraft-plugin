@@ -1,2 +1,18 @@
+# Connection timeout in seconds for Minecraft clients
 mc-timeout-sec: 30
+
+# Agent secret key (auto-generated after claiming)
 agent-secret: ""
+
+# Geyser/Bedrock tunnel settings
+# If true, automatically create a Bedrock tunnel when Geyser is detected
+auto_create_bedrock_tunnel: false
+
+# If true (and auto_create_bedrock_tunnel is false), prompt admin to run /playit createtunnels
+prompt_admin_for_bedrock: true
+
+# Local port for Bedrock/Geyser (default: 19132)
+bedrock_local_port: 19132
+
+# Local port for Java edition (default: 25565)
+java_local_port: 25565

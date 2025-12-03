@@ -32,7 +32,12 @@ public class PlayitManager implements Runnable {
             secret = null;
         }
 
-        setup = new PlayitKeysSetup(secret, state, isGeyserPresent, geyserPort);
+        // Get configuration options
+        int javaPort = plugin.getConfig().getInt(PlayitBukkit.CFG_JAVA_LOCAL_PORT, 25565);
+        boolean autoCreateBedrock = plugin.getConfig().getBoolean(PlayitBukkit.CFG_AUTO_CREATE_BEDROCK_TUNNEL, false);
+        boolean promptAdmin = plugin.getConfig().getBoolean(PlayitBukkit.CFG_PROMPT_ADMIN_FOR_BEDROCK, true);
+
+        setup = new PlayitKeysSetup(secret, state, isGeyserPresent, geyserPort, javaPort, autoCreateBedrock, promptAdmin);
     }
 
     private final PlayitKeysSetup setup;
@@ -91,6 +96,8 @@ public class PlayitManager implements Runnable {
 
                 if (keys != null) {
                     log.info("keys and tunnel setup");
+                    // Store agent ID in plugin for command handler access
+                    plugin.setAgentId(keys.agentId);
                     break;
                 }
             } catch (IOException e) {
@@ -161,6 +168,11 @@ public class PlayitManager implements Runnable {
 
         plugin.broadcast("tunnel setup");
         plugin.broadcast(keys.tunnelAddress);
+        
+        // Also broadcast bedrock tunnel address if available
+        if (keys.bedrockTunnelAddress != null) {
+            plugin.broadcast("Bedrock tunnel: " + keys.bedrockTunnelAddress);
+        }
 
         if (state.get() == STATE_SHUTDOWN) {
             return;

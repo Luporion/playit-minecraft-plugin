@@ -3,6 +3,7 @@ package gg.playit.minecraft;
 import gg.playit.api.ApiClient;
 import gg.playit.api.ApiError;
 import gg.playit.api.models.Notice;
+import gg.playit.minecraft.command.CreateTunnelsCommand;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.nio.NioEventLoopGroup;
 import org.bukkit.Bukkit;
@@ -27,6 +28,10 @@ import java.util.logging.Logger;
 public final class PlayitBukkit extends JavaPlugin implements Listener {
     public static final String CFG_AGENT_SECRET_KEY = "agent-secret";
     public static final String CFG_CONNECTION_TIMEOUT_SECONDS = "mc-timeout-sec";
+    public static final String CFG_AUTO_CREATE_BEDROCK_TUNNEL = "auto_create_bedrock_tunnel";
+    public static final String CFG_PROMPT_ADMIN_FOR_BEDROCK = "prompt_admin_for_bedrock";
+    public static final String CFG_BEDROCK_LOCAL_PORT = "bedrock_local_port";
+    public static final String CFG_JAVA_LOCAL_PORT = "java_local_port";
 
     static Logger log = Logger.getLogger(PlayitBukkit.class.getName());
     final EventLoopGroup eventGroup = new NioEventLoopGroup();
@@ -38,6 +43,24 @@ public final class PlayitBukkit extends JavaPlugin implements Listener {
 
     private boolean isGeyserPresent = false;
     private int geyserPort = 19132;
+    private volatile String agentId = null;
+
+    // Getter methods for command handler
+    public boolean isGeyserPresent() {
+        return isGeyserPresent;
+    }
+
+    public int getGeyserPort() {
+        return geyserPort;
+    }
+
+    public String getAgentId() {
+        return agentId;
+    }
+
+    public void setAgentId(String agentId) {
+        this.agentId = agentId;
+    }
 
     @Override
     public void onEnable() {
@@ -84,7 +107,20 @@ public final class PlayitBukkit extends JavaPlugin implements Listener {
             log.severe("failed to setup command /playit");
         }
 
+        // Register createtunnels command
+        var createTunnelsCmd = getCommand("playit-createtunnels");
+        if (createTunnelsCmd != null) {
+            CreateTunnelsCommand createTunnelsHandler = new CreateTunnelsCommand(this);
+            createTunnelsCmd.setExecutor(createTunnelsHandler);
+            createTunnelsCmd.setTabCompleter(createTunnelsHandler);
+        }
+
+        // Set config defaults
         getConfig().addDefault("agent-secret", "");
+        getConfig().addDefault(CFG_AUTO_CREATE_BEDROCK_TUNNEL, false);
+        getConfig().addDefault(CFG_PROMPT_ADMIN_FOR_BEDROCK, true);
+        getConfig().addDefault(CFG_BEDROCK_LOCAL_PORT, 19132);
+        getConfig().addDefault(CFG_JAVA_LOCAL_PORT, 25565);
         saveDefaultConfig();
 
         var secretKey = getConfig().getString("agent-secret");
@@ -125,6 +161,12 @@ public final class PlayitBukkit extends JavaPlugin implements Listener {
         if (!sender.isOp()) {
             sender.sendMessage("OP required");
             return true;
+        }
+
+        // Handle /playit createtunnels subcommand
+        if (args.length > 0 && args[0].equals("createtunnels")) {
+            CreateTunnelsCommand createTunnelsHandler = new CreateTunnelsCommand(this);
+            return createTunnelsHandler.onCommand(sender, command, label, args);
         }
 
         if (args.length > 0 && args[0].equals("agent")) {
@@ -326,7 +368,7 @@ public final class PlayitBukkit extends JavaPlugin implements Listener {
         }
 
         if (argCount == 0) {
-            return List.of("agent", "tunnel", "prop", "account");
+            return List.of("agent", "tunnel", "prop", "account", "createtunnels");
         }
 
         if (args[0].equals("account")) {

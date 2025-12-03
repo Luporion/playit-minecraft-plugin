@@ -12,3 +12,13 @@ commands:
     usage: /playit
     permission: Operators
     permission-message: You must be a server operator to run the playit command
+  playit-createtunnels:
+    description: Create Java and Bedrock tunnels for playit.gg
+    usage: /playit-createtunnels
+    permission: playit.createtunnels
+    permission-message: You don't have permission to create tunnels
+
+permissions:
+  playit.createtunnels:
+    description: Allows creation of playit.gg tunnels
+    default: op
