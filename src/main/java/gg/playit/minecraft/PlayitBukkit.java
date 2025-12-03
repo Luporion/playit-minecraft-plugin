@@ -38,6 +38,7 @@ public final class PlayitBukkit extends JavaPlugin implements Listener {
 
     private final Object managerSync = new Object();
     private volatile PlayitManager playitManager;
+    private CreateTunnelsCommand createTunnelsHandler;
 
     Server server;
 
@@ -108,9 +109,9 @@ public final class PlayitBukkit extends JavaPlugin implements Listener {
         }
 
         // Register createtunnels command
+        createTunnelsHandler = new CreateTunnelsCommand(this);
         var createTunnelsCmd = getCommand("playit-createtunnels");
         if (createTunnelsCmd != null) {
-            CreateTunnelsCommand createTunnelsHandler = new CreateTunnelsCommand(this);
             createTunnelsCmd.setExecutor(createTunnelsHandler);
             createTunnelsCmd.setTabCompleter(createTunnelsHandler);
         }
@@ -165,7 +166,6 @@ public final class PlayitBukkit extends JavaPlugin implements Listener {
 
         // Handle /playit createtunnels subcommand
         if (args.length > 0 && args[0].equals("createtunnels")) {
-            CreateTunnelsCommand createTunnelsHandler = new CreateTunnelsCommand(this);
             return createTunnelsHandler.onCommand(sender, command, label, args);
         }
 

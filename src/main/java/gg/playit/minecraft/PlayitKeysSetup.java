@@ -191,7 +191,10 @@ public class PlayitKeysSetup {
                     }
                 }
 
-                // If we have Java tunnel and handled bedrock (either exists, auto-created, or skipped with prompt)
+                // Complete setup if:
+                // 1. We have a Java tunnel AND
+                // 2. Either we have/handled the bedrock tunnel, OR we're not auto-creating bedrock
+                //    (meaning admin will create it manually via /playit createtunnels)
                 if (haveJava && (haveBedrock || !autoCreateBedrockTunnel)) {
                     return keys;
                 }

@@ -81,6 +81,19 @@ public class PlayitTunnelHelper {
     }
 
     public PlayitTunnelHelper(String secretKey, String agentId, int javaLocalPort, int bedrockLocalPort) {
+        if (secretKey == null || secretKey.isEmpty()) {
+            throw new IllegalArgumentException("Secret key cannot be null or empty");
+        }
+        if (agentId == null || agentId.isEmpty()) {
+            throw new IllegalArgumentException("Agent ID cannot be null or empty");
+        }
+        if (javaLocalPort < 1 || javaLocalPort > 65535) {
+            throw new IllegalArgumentException("Java local port must be between 1 and 65535");
+        }
+        if (bedrockLocalPort < 1 || bedrockLocalPort > 65535) {
+            throw new IllegalArgumentException("Bedrock local port must be between 1 and 65535");
+        }
+        
         this.api = new ApiClient(secretKey);
         this.agentId = agentId;
         this.javaLocalPort = javaLocalPort;

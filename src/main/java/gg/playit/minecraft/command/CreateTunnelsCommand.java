@@ -22,6 +22,9 @@ public class CreateTunnelsCommand implements CommandExecutor, TabCompleter {
     private final PlayitBukkit plugin;
 
     public CreateTunnelsCommand(PlayitBukkit plugin) {
+        if (plugin == null) {
+            throw new IllegalArgumentException("Plugin cannot be null");
+        }
         this.plugin = plugin;
     }
 
