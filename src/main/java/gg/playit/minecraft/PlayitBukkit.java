@@ -27,6 +27,10 @@ import java.util.logging.Logger;
 public final class PlayitBukkit extends JavaPlugin implements Listener {
     public static final String CFG_AGENT_SECRET_KEY = "agent-secret";
     public static final String CFG_CONNECTION_TIMEOUT_SECONDS = "mc-timeout-sec";
+    public static final String CFG_AUTO_CREATE_BEDROCK_TUNNEL = "auto_create_bedrock_tunnel";
+    public static final String CFG_PROMPT_ADMIN_FOR_BEDROCK = "prompt_admin_for_bedrock";
+    public static final String CFG_JAVA_LOCAL_PORT = "java_local_port";
+    public static final String CFG_BEDROCK_LOCAL_PORT = "bedrock_local_port";
 
     static Logger log = Logger.getLogger(PlayitBukkit.class.getName());
     final EventLoopGroup eventGroup = new NioEventLoopGroup();
@@ -38,6 +42,10 @@ public final class PlayitBukkit extends JavaPlugin implements Listener {
 
     private boolean isGeyserPresent = false;
     private int geyserPort = 19132;
+    private int javaLocalPort = 25565;
+    private int bedrockLocalPort = 19132;
+    private boolean autoCreateBedrockTunnel = false;
+    private boolean promptAdminForBedrock = true;
 
     @Override
     public void onEnable() {
@@ -85,7 +93,27 @@ public final class PlayitBukkit extends JavaPlugin implements Listener {
         }
 
         getConfig().addDefault("agent-secret", "");
+        getConfig().addDefault(CFG_AUTO_CREATE_BEDROCK_TUNNEL, false);
+        getConfig().addDefault(CFG_PROMPT_ADMIN_FOR_BEDROCK, true);
+        getConfig().addDefault(CFG_JAVA_LOCAL_PORT, 25565);
+        getConfig().addDefault(CFG_BEDROCK_LOCAL_PORT, 19132);
         saveDefaultConfig();
+
+        // Read config values
+        autoCreateBedrockTunnel = getConfig().getBoolean(CFG_AUTO_CREATE_BEDROCK_TUNNEL, false);
+        promptAdminForBedrock = getConfig().getBoolean(CFG_PROMPT_ADMIN_FOR_BEDROCK, true);
+        javaLocalPort = getConfig().getInt(CFG_JAVA_LOCAL_PORT, 25565);
+        bedrockLocalPort = getConfig().getInt(CFG_BEDROCK_LOCAL_PORT, 19132);
+
+        // If Geyser is present and config doesn't override, use Geyser's detected port
+        if (isGeyserPresent && bedrockLocalPort == 19132) {
+            bedrockLocalPort = geyserPort;
+        }
+
+        log.info("Configuration loaded - auto_create_bedrock_tunnel: " + autoCreateBedrockTunnel + 
+                 ", prompt_admin_for_bedrock: " + promptAdminForBedrock +
+                 ", java_local_port: " + javaLocalPort + 
+                 ", bedrock_local_port: " + bedrockLocalPort);
 
         var secretKey = getConfig().getString("agent-secret");
         resetConnection(secretKey);
@@ -287,7 +315,95 @@ public final class PlayitBukkit extends JavaPlugin implements Listener {
             }
         }
 
+        // Handle /playit createtunnels command
+        if (args.length > 0 && args[0].equals("createtunnels")) {
+            return handleCreateTunnelsCommand(sender);
+        }
+
         return false;
+    }
+
+    /**
+     * Handle the /playit createtunnels command.
+     */
+    private boolean handleCreateTunnelsCommand(CommandSender sender) {
+        var manager = playitManager;
+        String secretKey = getConfig().getString(CFG_AGENT_SECRET_KEY);
+        String agentId = manager != null ? manager.getAgentId() : null;
+
+        if (secretKey == null || secretKey.length() < 32) {
+            sender.sendMessage(ChatColor.RED + "[playit.gg] Error: Agent not configured. Please complete the initial setup first.");
+            sender.sendMessage(ChatColor.YELLOW + "Check server console for the claim URL.");
+            return true;
+        }
+
+        if (agentId == null || agentId.isEmpty()) {
+            sender.sendMessage(ChatColor.RED + "[playit.gg] Error: Agent ID not available. Please wait for setup to complete.");
+            return true;
+        }
+
+        sender.sendMessage(ChatColor.BLUE + "[playit.gg] " + ChatColor.RESET + "Creating tunnels...");
+        sender.sendMessage("  Geyser detected: " + (isGeyserPresent ? ChatColor.GREEN + "Yes" : ChatColor.GRAY + "No"));
+
+        // Run async to avoid blocking the main thread
+        new Thread(() -> {
+            try {
+                PlayitTunnelHelper helper = new PlayitTunnelHelper(secretKey, agentId, javaLocalPort, bedrockLocalPort);
+                PlayitTunnelHelper.TunnelStatus status = helper.createJavaAndBedrockTunnelsIfMissing(isGeyserPresent);
+
+                // Send results back to sender (on main thread for safety)
+                Bukkit.getScheduler().runTask(this, () -> sendTunnelResults(sender, status, isGeyserPresent));
+            } catch (Exception e) {
+                log.severe("[CreateTunnelsCommand] Error creating tunnels: " + e.getMessage());
+                Bukkit.getScheduler().runTask(this, () -> 
+                    sender.sendMessage(ChatColor.RED + "[playit.gg] Error creating tunnels: " + e.getMessage())
+                );
+            }
+        }).start();
+
+        return true;
+    }
+
+    /**
+     * Send tunnel creation results to command sender.
+     */
+    private void sendTunnelResults(CommandSender sender, PlayitTunnelHelper.TunnelStatus status, boolean geyserPresent) {
+        sender.sendMessage(ChatColor.BLUE + "[playit.gg] " + ChatColor.RESET + "Tunnel status:");
+
+        // Java tunnel status
+        if (status.javaCreated) {
+            sender.sendMessage(ChatColor.GREEN + "  ✓ Java tunnel created");
+        } else if (status.hasJavaTunnel) {
+            sender.sendMessage(ChatColor.GREEN + "  ✓ Java tunnel exists");
+        } else {
+            sender.sendMessage(ChatColor.RED + "  ✗ Java tunnel not available");
+        }
+
+        if (status.javaTunnelAddress != null) {
+            sender.sendMessage(ChatColor.WHITE + "    Address: " + ChatColor.AQUA + status.javaTunnelAddress);
+        }
+
+        // Bedrock tunnel status
+        if (geyserPresent) {
+            if (status.bedrockCreated) {
+                sender.sendMessage(ChatColor.GREEN + "  ✓ Bedrock tunnel created");
+            } else if (status.hasBedrockTunnel) {
+                sender.sendMessage(ChatColor.GREEN + "  ✓ Bedrock tunnel exists");
+            } else {
+                sender.sendMessage(ChatColor.RED + "  ✗ Bedrock tunnel not available");
+            }
+
+            if (status.bedrockTunnelAddress != null) {
+                sender.sendMessage(ChatColor.WHITE + "    Address: " + ChatColor.AQUA + status.bedrockTunnelAddress);
+            }
+        } else {
+            sender.sendMessage(ChatColor.GRAY + "  - Bedrock tunnel skipped (Geyser not detected)");
+        }
+
+        // Error message if any
+        if (status.errorMessage != null) {
+            sender.sendMessage(ChatColor.RED + "  Error: " + status.errorMessage);
+        }
     }
 
     private void resetConnection(String secretKey) {
@@ -301,7 +417,7 @@ public final class PlayitBukkit extends JavaPlugin implements Listener {
                 playitManager.shutdown();
             }
 
-            playitManager = new PlayitManager(this, isGeyserPresent, geyserPort);
+            playitManager = new PlayitManager(this, isGeyserPresent, bedrockLocalPort, autoCreateBedrockTunnel, promptAdminForBedrock);
             try {
                 int waitSeconds = getConfig().getInt(CFG_CONNECTION_TIMEOUT_SECONDS);
                 if (waitSeconds != 0) {
@@ -326,7 +442,7 @@ public final class PlayitBukkit extends JavaPlugin implements Listener {
         }
 
         if (argCount == 0) {
-            return List.of("agent", "tunnel", "prop", "account");
+            return List.of("agent", "tunnel", "prop", "account", "createtunnels");
         }
 
         if (args[0].equals("account")) {

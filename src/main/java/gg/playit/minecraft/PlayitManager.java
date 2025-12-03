@@ -20,19 +20,24 @@ public class PlayitManager implements Runnable {
 
     private final PlayitBukkit plugin;
     private final boolean isGeyserPresent;
-    private final int geyserPort;
+    private final int bedrockLocalPort;
+    private final boolean autoCreateBedrockTunnel;
+    private final boolean promptAdminForBedrock;
 
-    public PlayitManager(PlayitBukkit plugin, boolean isGeyserPresent, int geyserPort) {
+    public PlayitManager(PlayitBukkit plugin, boolean isGeyserPresent, int bedrockLocalPort, 
+                         boolean autoCreateBedrockTunnel, boolean promptAdminForBedrock) {
         this.plugin = plugin;
         this.isGeyserPresent = isGeyserPresent;
-        this.geyserPort = geyserPort;
+        this.bedrockLocalPort = bedrockLocalPort;
+        this.autoCreateBedrockTunnel = autoCreateBedrockTunnel;
+        this.promptAdminForBedrock = promptAdminForBedrock;
 
         var secret = plugin.getConfig().getString(PlayitBukkit.CFG_AGENT_SECRET_KEY);
         if (secret != null && secret.length() < 32) {
             secret = null;
         }
 
-        setup = new PlayitKeysSetup(secret, state, isGeyserPresent, geyserPort);
+        setup = new PlayitKeysSetup(secret, state, isGeyserPresent, bedrockLocalPort, autoCreateBedrockTunnel, promptAdminForBedrock);
     }
 
     private final PlayitKeysSetup setup;
@@ -59,6 +64,14 @@ public class PlayitManager implements Runnable {
             return null;
         }
         return k.notice;
+    }
+
+    public String getAgentId() {
+        var k = keys;
+        if (k == null) {
+            return null;
+        }
+        return k.agentId;
     }
 
     public volatile int connectionTimeoutSeconds = 30;
