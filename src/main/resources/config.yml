@@ -1,2 +1,12 @@
 mc-timeout-sec: 30
 agent-secret: ""
+
+# Geyser/Bedrock tunnel settings
+# Automatically create a Bedrock tunnel if Geyser-Spigot is detected
+auto_create_bedrock_tunnel: false
+# Prompt admin to confirm Bedrock tunnel creation (if auto_create_bedrock_tunnel is false)
+prompt_admin_for_bedrock: true
+# Local port for Java Minecraft tunnel (TCP)
+java_local_port: 25565
+# Local port for Bedrock Minecraft tunnel (UDP) - should match Geyser's bedrock port
+bedrock_local_port: 19132
