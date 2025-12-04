@@ -18,5 +18,7 @@ public enum TunnelType {
     @JsonProperty("7days")
     SevenDays,
     @JsonProperty("unturned")
-    Unturned
+    Unturned,
+    @JsonProperty("custom")
+    Custom
 }

@@ -417,7 +417,7 @@ public final class PlayitBukkit extends JavaPlugin implements Listener {
                 playitManager.shutdown();
             }
 
-            playitManager = new PlayitManager(this, isGeyserPresent, bedrockLocalPort, autoCreateBedrockTunnel, promptAdminForBedrock);
+            playitManager = new PlayitManager(this, isGeyserPresent, javaLocalPort, bedrockLocalPort, autoCreateBedrockTunnel, promptAdminForBedrock);
             try {
                 int waitSeconds = getConfig().getInt(CFG_CONNECTION_TIMEOUT_SECONDS);
                 if (waitSeconds != 0) {
