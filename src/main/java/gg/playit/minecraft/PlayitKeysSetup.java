@@ -25,16 +25,18 @@ public class PlayitKeysSetup {
     public static final int STATE_SHUTDOWN = 0;
     private final ApiClient openClient = new ApiClient(null);
     private final boolean isGeyserPresent;
+    private final int javaLocalPort;
     private final int bedrockLocalPort;
     private final boolean autoCreateBedrockTunnel;
     private final boolean promptAdminForBedrock;
     private boolean adminPromptSent = false;
 
-    public PlayitKeysSetup(String secretKey, AtomicInteger state, boolean isGeyserPresent, int bedrockLocalPort,
+    public PlayitKeysSetup(String secretKey, AtomicInteger state, boolean isGeyserPresent, int javaLocalPort, int bedrockLocalPort,
                            boolean autoCreateBedrockTunnel, boolean promptAdminForBedrock) {
         keys.secretKey = secretKey;
         this.state = state;
         this.isGeyserPresent = isGeyserPresent;
+        this.javaLocalPort = javaLocalPort;
         this.bedrockLocalPort = bedrockLocalPort;
         this.autoCreateBedrockTunnel = autoCreateBedrockTunnel;
         this.promptAdminForBedrock = promptAdminForBedrock;
@@ -132,41 +134,74 @@ public class PlayitKeysSetup {
                         haveJava = true;
                         log.info("found minecraft java tunnel: " + keys.tunnelAddress);
                     }
-                    if (tunnel.tunnelType == TunnelType.MinecraftBedrock) {
+                    // Check for both MinecraftBedrock and Custom UDP tunnels (Custom is used as fallback for Bedrock)
+                    if ((tunnel.tunnelType == TunnelType.MinecraftBedrock || tunnel.tunnelType == TunnelType.Custom) && tunnel.portType == PortType.UDP) {
                         keys.bedrockTunnelAddress = tunnel.displayAddress;
                         haveBedrock = true;
-                        log.info("found minecraft bedrock tunnel: " + tunnel.displayAddress);
+                        log.info("found minecraft bedrock/UDP tunnel: " + tunnel.displayAddress + " (type: " + tunnel.tunnelType + ")");
                     }
                 }
 
                 // Always create Java tunnel if not found
                 if (!haveJava) {
-                    log.info("create new minecraft java tunnel");
+                    log.info("Creating new minecraft java tunnel on local port " + javaLocalPort);
 
                     var create = new CreateTunnel();
                     create.localIp = "127.0.0.1";
+                    create.localPort = javaLocalPort;
                     create.portCount = 1;
                     create.portType = PortType.TCP;
                     create.tunnelType = TunnelType.MinecraftJava;
                     create.agentId = keys.agentId;
 
-                    api.createTunnel(create);
+                    log.info("[PlayitKeysSetup] API Request - Creating Java tunnel: tunnel_type=minecraft-java, port_type=tcp, local_ip=127.0.0.1, local_port=" + javaLocalPort + ", agent_id=" + keys.agentId);
+                    try {
+                        api.createTunnel(create);
+                        log.info("[PlayitKeysSetup] Successfully created Java tunnel request");
+                    } catch (ApiError e) {
+                        log.warning("[PlayitKeysSetup] Failed to create Java tunnel: " + e.getMessage());
+                        if (e.responseBody != null && e.responseBody.contains("tunnel already exists")) {
+                            log.info("[PlayitKeysSetup] Tunnel already exists for agent. Checking existing tunnels...");
+                            log.warning("[PlayitKeysSetup] If local_port mismatch, update in playit dashboard: https://playit.gg/account");
+                        } else {
+                            log.warning("[PlayitKeysSetup] API Response: " + e.responseBody);
+                            log.warning("[PlayitKeysSetup] Recommended: Visit https://playit.gg/account to check your tunnels");
+                        }
+                    }
                     return null; // Wait for tunnel to appear
                 }
 
                 // Handle Bedrock tunnel based on configuration
                 if (isGeyserPresent && !haveBedrock) {
                     if (autoCreateBedrockTunnel) {
-                        // Auto-create Bedrock tunnel
-                        log.info("auto_create_bedrock_tunnel is enabled, creating new minecraft bedrock UDP tunnel on port " + bedrockLocalPort);
+                        // Auto-create Bedrock tunnel using Custom UDP type to avoid "Invalid Origin" errors
+                        log.info("auto_create_bedrock_tunnel is enabled, creating new Bedrock UDP tunnel on port " + bedrockLocalPort);
                         var create = new CreateTunnel();
                         create.localIp = "127.0.0.1";
                         create.localPort = bedrockLocalPort;
                         create.portCount = 1;
                         create.portType = PortType.UDP;
-                        create.tunnelType = TunnelType.MinecraftBedrock;
+                        create.tunnelType = TunnelType.Custom;
                         create.agentId = keys.agentId;
-                        api.createTunnel(create);
+                        
+                        log.info("[PlayitKeysSetup] API Request - Creating Bedrock tunnel: tunnel_type=custom, port_type=udp, local_ip=127.0.0.1, local_port=" + bedrockLocalPort + ", agent_id=" + keys.agentId);
+                        try {
+                            api.createTunnel(create);
+                            log.info("[PlayitKeysSetup] Successfully created Bedrock tunnel request");
+                        } catch (ApiError e) {
+                            log.warning("[PlayitKeysSetup] Failed to create Bedrock tunnel: " + e.getMessage());
+                            if (e.responseBody != null) {
+                                log.warning("[PlayitKeysSetup] API Response: " + e.responseBody);
+                                if (e.responseBody.contains("tunnel already exists")) {
+                                    log.info("[PlayitKeysSetup] Tunnel already exists for agent. Checking existing tunnels...");
+                                    log.warning("[PlayitKeysSetup] If local_port mismatch, update in playit dashboard: https://playit.gg/account");
+                                } else if (e.responseBody.contains("Invalid Origin")) {
+                                    log.warning("[PlayitKeysSetup] 'Invalid Origin' error. This may be a playit.gg API limitation.");
+                                    log.warning("[PlayitKeysSetup] Try creating the Bedrock tunnel manually at: https://playit.gg/account");
+                                }
+                            }
+                            log.warning("[PlayitKeysSetup] Recommended: Visit https://playit.gg/account to manage your tunnels");
+                        }
                         return null; // Wait for tunnel to appear
                     } else if (promptAdminForBedrock && !adminPromptSent) {
                         // Prompt admin to create Bedrock tunnel manually

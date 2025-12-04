@@ -69,10 +69,11 @@ public class PlayitTunnelHelper {
                     status.javaTunnelAddress = tunnel.displayAddress;
                     log.info("[PlayitTunnelHelper] Found existing Java tunnel: " + tunnel.displayAddress);
                 }
-                if (tunnel.tunnelType == TunnelType.MinecraftBedrock && tunnel.portType == PortType.UDP) {
+                // Check for both MinecraftBedrock and Custom UDP tunnels (Custom is used as fallback for Bedrock)
+                if ((tunnel.tunnelType == TunnelType.MinecraftBedrock || tunnel.tunnelType == TunnelType.Custom) && tunnel.portType == PortType.UDP) {
                     status.hasBedrockTunnel = true;
                     status.bedrockTunnelAddress = tunnel.displayAddress;
-                    log.info("[PlayitTunnelHelper] Found existing Bedrock tunnel: " + tunnel.displayAddress);
+                    log.info("[PlayitTunnelHelper] Found existing Bedrock/UDP tunnel: " + tunnel.displayAddress + " (type: " + tunnel.tunnelType + ")");
                 }
             }
 
@@ -111,6 +112,7 @@ public class PlayitTunnelHelper {
             create.tunnelType = TunnelType.MinecraftJava;
             create.agentId = agentId;
 
+            log.info("[PlayitTunnelHelper] API Request - Creating Java tunnel: tunnel_type=minecraft-java, port_type=tcp, local_ip=127.0.0.1, local_port=" + javaLocalPort + ", agent_id=" + agentId);
             api.createTunnel(create);
             status.javaCreated = true;
             log.info("[PlayitTunnelHelper] Successfully created Java tunnel");
@@ -118,11 +120,13 @@ public class PlayitTunnelHelper {
         } catch (ApiError e) {
             if (e.responseBody != null && e.responseBody.contains("tunnel already exists")) {
                 log.info("[PlayitTunnelHelper] Java tunnel already exists (API response)");
+                log.warning("[PlayitTunnelHelper] If local_port mismatch, update in playit dashboard: https://playit.gg/account");
                 status.hasJavaTunnel = true;
                 return true;
             }
             status.errorMessage = "API error creating Java tunnel: " + e.getMessage();
             log.warning("[PlayitTunnelHelper] " + status.errorMessage);
+            log.warning("[PlayitTunnelHelper] API Response: " + e.responseBody);
             logTunnelCreationHelp("Java", e);
             return false;
         } catch (IOException e) {
@@ -134,6 +138,7 @@ public class PlayitTunnelHelper {
 
     /**
      * Create a Bedrock (UDP) tunnel if it doesn't already exist.
+     * Uses Custom tunnel type to avoid "Invalid Origin" errors from the playit.gg API.
      *
      * @param status The current tunnel status (will be updated)
      * @return true if tunnel was created or already exists, false on error
@@ -144,8 +149,51 @@ public class PlayitTunnelHelper {
             return true;
         }
 
+        // Try creating with Custom UDP type first to avoid "Invalid Origin" errors
         try {
-            log.info("[PlayitTunnelHelper] Creating Bedrock (UDP) tunnel on local port " + bedrockLocalPort);
+            log.info("[PlayitTunnelHelper] Creating Bedrock (UDP) tunnel on local port " + bedrockLocalPort + " using Custom tunnel type");
+
+            CreateTunnel create = new CreateTunnel();
+            create.localIp = "127.0.0.1";
+            create.localPort = bedrockLocalPort;
+            create.portCount = 1;
+            create.portType = PortType.UDP;
+            create.tunnelType = TunnelType.Custom;
+            create.agentId = agentId;
+
+            log.info("[PlayitTunnelHelper] API Request - Creating Bedrock tunnel: tunnel_type=custom, port_type=udp, local_ip=127.0.0.1, local_port=" + bedrockLocalPort + ", agent_id=" + agentId);
+            api.createTunnel(create);
+            status.bedrockCreated = true;
+            log.info("[PlayitTunnelHelper] Successfully created Bedrock tunnel (Custom UDP)");
+            return true;
+        } catch (ApiError e) {
+            if (e.responseBody != null && e.responseBody.contains("tunnel already exists")) {
+                log.info("[PlayitTunnelHelper] Bedrock tunnel already exists (API response)");
+                log.warning("[PlayitTunnelHelper] If local_port mismatch, update in playit dashboard: https://playit.gg/account");
+                status.hasBedrockTunnel = true;
+                return true;
+            }
+            
+            // If Custom type fails, try MinecraftBedrock as fallback
+            log.warning("[PlayitTunnelHelper] Custom UDP tunnel creation failed: " + e.getMessage());
+            log.warning("[PlayitTunnelHelper] API Response: " + e.responseBody);
+            log.info("[PlayitTunnelHelper] Trying fallback with MinecraftBedrock tunnel type...");
+            
+            return createBedrockTunnelWithFallback(status, e);
+        } catch (IOException e) {
+            status.errorMessage = "IO error creating Bedrock tunnel: " + e.getMessage();
+            log.severe("[PlayitTunnelHelper] " + status.errorMessage);
+            return false;
+        }
+    }
+
+    /**
+     * Fallback method to create Bedrock tunnel with MinecraftBedrock type.
+     * Called when Custom tunnel type fails with the given originalError.
+     */
+    private boolean createBedrockTunnelWithFallback(TunnelStatus status, ApiError originalError) {
+        try {
+            log.info("[PlayitTunnelHelper] Creating Bedrock tunnel with MinecraftBedrock type as fallback (original error: " + originalError.statusCode + ")");
 
             CreateTunnel create = new CreateTunnel();
             create.localIp = "127.0.0.1";
@@ -155,22 +203,37 @@ public class PlayitTunnelHelper {
             create.tunnelType = TunnelType.MinecraftBedrock;
             create.agentId = agentId;
 
+            log.info("[PlayitTunnelHelper] API Request (Fallback) - Creating Bedrock tunnel: tunnel_type=minecraft-bedrock, port_type=udp, local_ip=127.0.0.1, local_port=" + bedrockLocalPort + ", agent_id=" + agentId);
             api.createTunnel(create);
             status.bedrockCreated = true;
-            log.info("[PlayitTunnelHelper] Successfully created Bedrock tunnel");
+            log.info("[PlayitTunnelHelper] Successfully created Bedrock tunnel (MinecraftBedrock fallback)");
             return true;
         } catch (ApiError e) {
             if (e.responseBody != null && e.responseBody.contains("tunnel already exists")) {
                 log.info("[PlayitTunnelHelper] Bedrock tunnel already exists (API response)");
+                log.warning("[PlayitTunnelHelper] If local_port mismatch, update in playit dashboard: https://playit.gg/account");
                 status.hasBedrockTunnel = true;
                 return true;
             }
-            status.errorMessage = "API error creating Bedrock tunnel: " + e.getMessage();
+            
+            // Both attempts failed - include original error info
+            status.errorMessage = "API error creating Bedrock tunnel (both Custom and MinecraftBedrock types failed). " +
+                    "Custom error: " + originalError.statusCode + ", Fallback error: " + e.statusCode;
             log.warning("[PlayitTunnelHelper] " + status.errorMessage);
+            log.warning("[PlayitTunnelHelper] Original Custom type error: " + originalError.responseBody);
+            log.warning("[PlayitTunnelHelper] Fallback MinecraftBedrock type error: " + e.responseBody);
+            
+            if ((e.responseBody != null && e.responseBody.contains("Invalid Origin")) ||
+                (originalError.responseBody != null && originalError.responseBody.contains("Invalid Origin"))) {
+                log.warning("[PlayitTunnelHelper] 'Invalid Origin' error occurred. This may be a playit.gg API limitation.");
+                log.warning("[PlayitTunnelHelper] Please create the Bedrock tunnel manually at: https://playit.gg/account");
+                log.warning("[PlayitTunnelHelper] When creating manually, set local_port to " + bedrockLocalPort + " (your Geyser port)");
+            }
+            
             logTunnelCreationHelp("Bedrock", e);
             return false;
         } catch (IOException e) {
-            status.errorMessage = "IO error creating Bedrock tunnel: " + e.getMessage();
+            status.errorMessage = "IO error creating Bedrock tunnel (fallback): " + e.getMessage();
             log.severe("[PlayitTunnelHelper] " + status.errorMessage);
             return false;
         }
