@@ -189,10 +189,11 @@ public class PlayitTunnelHelper {
 
     /**
      * Fallback method to create Bedrock tunnel with MinecraftBedrock type.
+     * Called when Custom tunnel type fails with the given originalError.
      */
     private boolean createBedrockTunnelWithFallback(TunnelStatus status, ApiError originalError) {
         try {
-            log.info("[PlayitTunnelHelper] Creating Bedrock tunnel with MinecraftBedrock type as fallback");
+            log.info("[PlayitTunnelHelper] Creating Bedrock tunnel with MinecraftBedrock type as fallback (original error: " + originalError.statusCode + ")");
 
             CreateTunnel create = new CreateTunnel();
             create.localIp = "127.0.0.1";
@@ -215,12 +216,15 @@ public class PlayitTunnelHelper {
                 return true;
             }
             
-            // Both attempts failed
-            status.errorMessage = "API error creating Bedrock tunnel (both Custom and MinecraftBedrock types failed): " + e.getMessage();
+            // Both attempts failed - include original error info
+            status.errorMessage = "API error creating Bedrock tunnel (both Custom and MinecraftBedrock types failed). " +
+                    "Custom error: " + originalError.statusCode + ", Fallback error: " + e.statusCode;
             log.warning("[PlayitTunnelHelper] " + status.errorMessage);
-            log.warning("[PlayitTunnelHelper] API Response: " + e.responseBody);
+            log.warning("[PlayitTunnelHelper] Original Custom type error: " + originalError.responseBody);
+            log.warning("[PlayitTunnelHelper] Fallback MinecraftBedrock type error: " + e.responseBody);
             
-            if (e.responseBody != null && e.responseBody.contains("Invalid Origin")) {
+            if ((e.responseBody != null && e.responseBody.contains("Invalid Origin")) ||
+                (originalError.responseBody != null && originalError.responseBody.contains("Invalid Origin"))) {
                 log.warning("[PlayitTunnelHelper] 'Invalid Origin' error occurred. This may be a playit.gg API limitation.");
                 log.warning("[PlayitTunnelHelper] Please create the Bedrock tunnel manually at: https://playit.gg/account");
                 log.warning("[PlayitTunnelHelper] When creating manually, set local_port to " + bedrockLocalPort + " (your Geyser port)");
